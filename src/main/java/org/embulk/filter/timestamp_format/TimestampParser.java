@@ -50,6 +50,7 @@ public class TimestampParser {
 
     private final List<JRubyTimeParserHelper> jrubyParserList = new ArrayList<>();
     private final List<DateTimeFormatter> javaParserList = new ArrayList<>();
+    private final List<UnixTimeParser> unixTimeParserList = new ArrayList<>();
     private final List<Boolean> handleNanoResolutionList = new ArrayList<>();
     private final DateTimeZone defaultFromTimeZone;
     private final Pattern nanoSecPattern = Pattern.compile("\\.(\\d+)");
@@ -72,6 +73,8 @@ public class TimestampParser {
             if (format.contains("%")) {
                 JRubyTimeParserHelper helper = (JRubyTimeParserHelper) helperFactory.newInstance(format, 1970, 1, 1, 0, 0, 0, 0);  // TODO default time zone
                 this.jrubyParserList.add(helper);
+            } else if(format.equals("UNIX_TIME_DAY")){
+                this.unixTimeParserList.add(getUnixTimeParser());
             } else {
                 // special treatment for nano resolution. n is not originally supported by Joda-Time
                 if (format.contains("nnnnnnnnn")) {
@@ -90,6 +93,10 @@ public class TimestampParser {
         this.defaultFromTimeZone = defaultFromTimeZone;
     }
 
+    private UnixTimeParser getUnixTimeParser() {
+        return new UnixTimeParser();
+    }
+
     public DateTimeZone getDefaultFromTimeZone() {
         return defaultFromTimeZone;
     }
@@ -99,6 +106,8 @@ public class TimestampParser {
             return jrubyParse(text);
         } else if (!javaParserList.isEmpty()) {
             return javaParse(text);
+        } else if (!unixTimeParserList.isEmpty()) {
+            return unixTitmeParse(text);
         } else {
             assert false;
             throw new RuntimeException();
@@ -172,6 +181,26 @@ public class TimestampParser {
             long nanoAdjustment = msec * 1000000;
             return Timestamp.ofEpochSecond(0, nanoAdjustment);
         }
+    }
+
+    private Timestamp unixTitmeParse(String text) throws IllegalArgumentException {
+        long nsec = -1;
+        IllegalArgumentException exception = null;
+
+        for (int i = 0; i < unixTimeParserList.size(); i++) {
+            UnixTimeParser parser = unixTimeParserList.get(i);
+            try {
+                nsec = parser.parse(text);
+                break;
+            } catch (IllegalArgumentException ex) {
+                exception = ex;
+            }
+        }
+
+        if(exception != null){
+            throw exception;
+        }
+        return Timestamp.ofEpochSecond(0, nsec);
     }
 
     private long parseNano(String text) {
